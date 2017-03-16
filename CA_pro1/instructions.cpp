@@ -166,9 +166,9 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 	//according to the opcode get the name of operation
 	operation = get_operation(opcode, instr);
 	std::cout << operation << endl;
-	while (/*operation&&operation!="halt"*/cycle_num<12) {
+	while (/*operation&&operation!="halt"*/cycle_num<13) {
 		++cycle_num;
-		std::cout << "cycle " << cycle_num << endl;
+		std::cout << "cycle " << dec<<cycle_num << endl;
 		if (operation == "add" || operation == "addu" || operation == "sub" || operation == "and" || operation == "or" || operation == "xor" || operation == "nor" || operation == "nand" || operation == "slt") {
 			int rs, rt, rd;
 			rs = (0x03e00000 & instr) >> 21;
@@ -204,7 +204,7 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 				printf("$%02d: 0x%08X\n", rt, cycle[rt]);
 				printf("PC: 0x%08X\n", PC);
 			}
-			else if (operation == "sw" || operation == "bne") {
+			else if (operation == "sw" || operation == "bne"||operation == "beq"||operation == "sb"||operation == "sh") {
 				if (operation == "sw") {
 					if (rs != 0) {
 						//save ra in stack
@@ -212,6 +212,26 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 					}
 					else {
 						data[immediate / 4 + 2] = cycle[rt];
+					}
+					PC = PC + 4;
+				}
+				else if (operation == "sh") {
+					if (rs != 0) {
+						//save ra in stack
+						stack[immediate / 4] = cycle[rt]&0x0000ffff;
+					}
+					else {
+						data[immediate / 4 + 2] = cycle[rt]&0x0000ffff;
+					}
+					PC = PC + 4;
+				}
+				else if(operation == "sb"){
+					if (rs != 0) {
+						//save ra in stack
+						stack[immediate / 4] = cycle[rt] & 0x000000ff;
+					}
+					else {
+						data[immediate / 4 + 2] = cycle[rt] & 0x000000ff;
 					}
 					PC = PC + 4;
 				}
@@ -304,6 +324,11 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 				}
 				PC = PC + 4;
 				printf("$%02d: 0x%08X\n", rt, cycle[rt]);
+				printf("PC: 0x%08X\n", PC);
+			}
+			else if (operation == "slti") {
+				cycle[rt] = (cycle[rs] < (int32_t)immediate);
+				PC = PC + 4;
 				printf("PC: 0x%08X\n", PC);
 			}
 		}
