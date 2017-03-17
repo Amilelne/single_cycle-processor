@@ -150,6 +150,7 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 	short int HI_flag = 0;//check if HI has changed
 	short int LO_flag = 0;//check if LO has changed
 	cycle[29] = (unsigned int)data[0];
+	unsigned int iniSP = cycle[29];//save the initial value of SP pointer;
 	ofstream error_file;
 	error_file.open("error_dump.rpt");
 	std::cout << "cycle " << cycle_num << endl;
@@ -166,7 +167,7 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 	//according to the opcode get the name of operation
 	operation = get_operation(opcode, instr);
 	std::cout << operation << endl;
-	while (/*operation&&operation!="halt"*/cycle_num<13) {
+	while (operation&&operation!="halt") {
 		++cycle_num;
 		std::cout << "cycle " << dec<<cycle_num << endl;
 		if (operation == "add" || operation == "addu" || operation == "sub" || operation == "and" || operation == "or" || operation == "xor" || operation == "nor" || operation == "nand" || operation == "slt") {
@@ -175,12 +176,26 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 			rt = (0x001f0000 & instr) >> 16;
 			rd = (0x0000f800 & instr) >> 11;
 			printf("rs=%d,rt=%d,rd=%d\n", rs, rt, rd);
+			int rd_value = cycle[rd];
 			if (operation == "add") {
 				cycle[rd] = cycle[rs] + cycle[rt];
-				printf("$%02d: 0x%08X\n", rd, cycle[rd]);
+				if(cycle[rd]!=rd_value)
+					printf("$%02d: 0x%08X\n", rd, cycle[rd]);
 			}
 			else if (operation == "slt") {
 				cycle[rd] = (cycle[rs] < cycle[rt]);
+				if(cycle[rd]!=rd_value)
+					printf("$%02d: 0x%08X\n", rd, cycle[rd]);
+			}
+			else if (operation == "or") {
+				cycle[rd] = cycle[rs] | cycle[rt];
+				if (cycle[rd] != rd_value)
+					printf("$%02d: 0x%08X\n", rd, cycle[rd]);
+			}
+			else if (operation == "sub") {
+				cycle[rd] = cycle[rs] - cycle[rt];
+				if (cycle[rd] != rd_value)
+					printf("$%02d: 0x%08X\n", rd, cycle[rd]);
 			}
 			PC = PC + 4;
 			printf("PC: 0x%08X\n", PC);
@@ -189,6 +204,7 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 			short int rs, rt, immediate;
 			rs = (0x03e00000 & instr) >> 21;
 			rt = (0x001f0000 & instr) >> 16;
+			int rt_value = cycle[rt];
 			immediate = (0x0000ffff & instr);
 			printf("rs=%d,rt=%d,immediate=%d\n", rs, rt, immediate);
 			if (operation == "addi") {//×¢ÒâÒç³ö´íÎó
@@ -201,14 +217,15 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 				}
 				cycle[rt] = cycle[rs] +tmp;
 				PC = PC + 4;
-				printf("$%02d: 0x%08X\n", rt, cycle[rt]);
+				if(cycle[rt]!=rt_value)
+					printf("$%02d: 0x%08X\n", rt, cycle[rt]);
 				printf("PC: 0x%08X\n", PC);
 			}
 			else if (operation == "sw" || operation == "bne"||operation == "beq"||operation == "sb"||operation == "sh") {
 				if (operation == "sw") {
 					if (rs != 0) {
 						//save ra in stack
-						stack[immediate / 4] = cycle[rt];
+						stack[immediate / 4+(iniSP-cycle[29])/4-1] = cycle[rt];
 					}
 					else {
 						data[immediate / 4 + 2] = cycle[rt];
@@ -216,22 +233,48 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 					PC = PC + 4;
 				}
 				else if (operation == "sh") {
-					if (rs != 0) {
-						//save ra in stack
-						stack[immediate / 4] = cycle[rt]&0x0000ffff;
+					if (rs == 0) {
+						int pos = immediate / 4 + 2;
+						if (immediate % 2 == 0) {
+							data[pos] = (data[pos] & 0xffff) | (cycle[rt] << 16);
+						}
+						else {
+							data[pos] = (data[pos] & 0xffff0000) | cycle[rt];//unknow whether need to expand to int32_t
+						}
 					}
 					else {
-						data[immediate / 4 + 2] = cycle[rt]&0x0000ffff;
+						int pos = immediate / 4 + 1+(iniSP-cycle[29])/4;
+						if (immediate % 2 == 0) {
+							stack[pos] = (stack[pos] & 0xffff) | (cycle[rt] << 16);
+						}
+						else {
+							stack[pos] = (stack[pos] & 0xffff0000) | cycle[rt];
+						}
 					}
 					PC = PC + 4;
 				}
 				else if(operation == "sb"){
-					if (rs != 0) {
-						//save ra in stack
-						stack[immediate / 4] = cycle[rt] & 0x000000ff;
+					if (rs == 0) {
+						int pos = immediate / 4 + 2;
+						if (immediate % 4 == 0)
+							data[pos] = (data[pos] & 0xffffff) | ((cycle[rt] & 0xff)<<24);
+						else if (immediate % 4 == 1)
+							data[pos] = (data[pos] & 0xff00ffff) | ((cycle[rt] & 0xff) << 16);
+						else if (immediate % 4 == 2)
+							data[pos] = (data[pos] & 0xffff00ff) | ((cycle[rt] & 0xff) << 8);
+						else
+							data[pos] = (data[pos] & 0xffffff00) | (cycle[rt] & 0xff);
 					}
 					else {
-						data[immediate / 4 + 2] = cycle[rt] & 0x000000ff;
+						int pos = immediate / 4 + 1 + (iniSP - cycle[29]) / 4;
+						if (immediate % 4 == 0)
+							stack[pos] = (stack[pos] & 0xffffff) | ((cycle[rt] & 0xff) << 24);
+						else if (immediate % 4 == 1)
+							stack[pos] = (stack[pos] & 0xff00ffff) | ((cycle[rt] & 0xff) << 16);
+						else if (immediate % 4 == 2)
+							stack[pos] = (stack[pos] & 0xffff00ff) | ((cycle[rt] & 0xff) << 8);
+						else
+							stack[pos] = (stack[pos] & 0xffffff00) | (cycle[rt] & 0xff);
 					}
 					PC = PC + 4;
 				}
@@ -244,19 +287,22 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 				else if (operation == "beq") {
 					if (cycle[rs] == cycle[rt])
 						PC = PC + 4 + 4 * immediate;
+					else
+						PC = PC + 4;
 				}
 				cout << "PC: " << hex << setfill('0') << setw(8) << PC << endl;
 			}
 			else if (operation == "lw") {
 				if (rs != 0) {
 					//get data from stack
-					cycle[rt] = stack[immediate / 4];
+					cycle[rt] = stack[immediate / 4+(iniSP-cycle[29])/4-1];
 				}
 				else {
-					cycle[rt] = data[2 + immediate / 4];
+					cycle[rt] = data[2+immediate / 4];
 				}
 				PC = PC + 4;
-				printf("$%02d: 0x%08X\n", rt, cycle[rt]);
+				if (cycle[rt] != rt_value)
+					printf("$%02d: 0x%08X\n", rt, cycle[rt]);
 				printf("PC: 0x%08X\n", PC);
 			}
 			else if (operation == "addiu") {
@@ -269,66 +315,115 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 				}
 				cycle[rt] = cycle[rs] + tmp;
 				PC = PC + 4;
-				printf("$%02d: 0x%08X\n", rt, cycle[rt]);
+				if (cycle[rt] != rt_value)
+					printf("$%02d: 0x%08X\n", rt, cycle[rt]);
 				printf("PC: 0x%08X\n", PC);
 			}
 			else if (operation == "lhu") {
 				if (rs == 0) {
-					cycle[rt] = (unsigned int)(data[immediate / 4 + 2]>>16);
+					int pos = immediate / 4 + 2;
+					if (immediate % 2 == 0) {
+						cycle[rt] = (uint32_t)((uint16_t)((data[immediate / 4 + 2] & 0xffff0000)>>16));
+					}
+					else {
+						cycle[rt] = (uint32_t)((uint16_t)(data[immediate / 4 + 2] & 0xffff0000));
+					}
+				}
+				else {
+					int pos = immediate / 4 + 2;
+					if (immediate % 2 == 0) {
+						cycle[rt] = (uint32_t)((uint16_t)((stack[immediate / 4 + (iniSP - cycle[29]) / 4 + 1] & 0xffff0000) >> 16));
+					}
+					else {
+						cycle[rt] = (uint32_t)((uint16_t)(stack[immediate / 4 + (iniSP - cycle[29]) / 4 + 1] & 0xffff0000));
+					}
 				}
 				PC = PC + 4;
-				printf("$%02d: 0x%08X\n", rt, cycle[rt]);
+				if (cycle[rt] != rt_value)
+					printf("$%02d: 0x%08X\n", rt, cycle[rt]);
 				printf("PC: 0x%08X\n", PC);
 			}
 			else if (operation == "lh") {
 				if (rs == 0) {
-					cycle[rt] = (int)(data[immediate / 4 + 2] >> 16);
+					int pos = immediate / 4 + 2;
+					if (immediate % 2 == 0) {
+						cycle[rt] = (int32_t)((int16_t)((data[immediate / 4 + 2] & 0xffff0000) >> 16));
+					}
+					else {
+						cycle[rt] = (int32_t)((int16_t)(data[immediate / 4 + 2] & 0xffff0000));
+					}
+				}
+				else {
+					int pos = immediate / 4 + 2;
+					if (immediate % 2 == 0) {
+						cycle[rt] = (int32_t)((int16_t)((stack[immediate / 4 + (iniSP - cycle[29]) / 4 + 1] & 0xffff0000) >> 16));
+					}
+					else {
+						cycle[rt] = (int32_t)((int16_t)(stack[immediate / 4 + (iniSP - cycle[29]) / 4 + 1] & 0xffff0000));
+					}
 				}
 				PC = PC + 4;
-				printf("$%02d: 0x%08X\n", rt, cycle[rt]);
+				if (cycle[rt] != rt_value)
+					printf("$%02d: 0x%08X\n", rt, cycle[rt]);
 				printf("PC: 0x%08X\n", PC);
 			}
 			else if (operation == "ori") {
 				cycle[rt] = cycle[rs] | (unsigned int)immediate;
 				PC = PC + 4;
-				printf("$%02d: 0x%08X\n", rt, cycle[rt]);
+				if (cycle[rt] != rt_value)
+					printf("$%02d: 0x%08X\n", rt, cycle[rt]);
 				printf("PC: 0x%08X\n", PC);
 			}
 			else if (operation == "lbu") {
 				if (rs == 0) {
 					int pos = immediate / 4 + 2;
-					if (immediate == 0)
+					if (immediate%4 == 0)
 						cycle[rt] = (unsigned int)((data[pos] & 0xff000000) >> 24);
-					else if (immediate == 1)
+					else if (immediate%4 == 1)
 						cycle[rt] = (unsigned int)((data[pos] & 0x00ff0000) >> 16);
-					else if (immediate == 2)
+					else if (immediate%4 == 2)
 						cycle[rt] = (unsigned int)((data[pos] & 0x0000ff00) >> 8);
 					else
 						cycle[rt] = (unsigned int)(data[pos] & 0x000000ff);
 				}
 				PC = PC + 4;
-				printf("$%02d: 0x%08X\n", rt, cycle[rt]);
+				if (cycle[rt] != rt_value)
+					printf("$%02d: 0x%08X\n", rt, cycle[rt]);
 				printf("PC: 0x%08X\n", PC);
 			}
 			else if (operation == "lb") {
 				if(rs == 0) {
 					int pos = immediate/4+2;
-					if (immediate == 0)
+					if (immediate%4 == 0)
 						cycle[rt] = (int64_t)((int8_t)(data[pos]>>24));
-					else if(immediate == 1)
+					else if(immediate%4 == 1)
 						cycle[rt] = (int64_t)(int8_t)(((data[pos] & 0x00ff0000) >> 16));
-					else if(immediate == 2)
+					else if(immediate%4 == 2)
 						cycle[rt] = (int64_t)((int8_t)((data[pos] & 0x0000ff00) >> 8));
 					else
 						cycle[rt] = (int64_t)((int8_t)(data[pos] & 0x000000ff));
 				}
+				else {
+					int pos = immediate / 4 + (iniSP - cycle[29]) / 4 - 1;
+					if (immediate % 4 == 0)
+						cycle[rt] = (int64_t)((int8_t)(stack[pos] >> 24));
+					else if (immediate % 4 == 1)
+						cycle[rt] = (int64_t)(int8_t)(((stack[pos] & 0x00ff0000) >> 16));
+					else if (immediate % 4 == 2)
+						cycle[rt] = (int64_t)((int8_t)((stack[pos] & 0x0000ff00) >> 8));
+					else
+						cycle[rt] = (int64_t)((int8_t)(stack[pos] & 0x000000ff));;
+				}
 				PC = PC + 4;
-				printf("$%02d: 0x%08X\n", rt, cycle[rt]);
+				if (cycle[rt] != rt_value)
+					printf("$%02d: 0x%08X\n", rt, cycle[rt]);
 				printf("PC: 0x%08X\n", PC);
 			}
 			else if (operation == "slti") {
 				cycle[rt] = (cycle[rs] < (int32_t)immediate);
 				PC = PC + 4;
+				if(cycle[rt]!=rt_value)
+					printf("$%02d: 0x%08X\n", rt, cycle[rt]);
 				printf("PC: 0x%08X\n", PC);
 			}
 		}
@@ -351,15 +446,18 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 			rs = (0x03e00000 & instr) >> 21;
 			rt = (0x001f0000 & instr) >> 16;
 			printf("rs=%d,rt=%d\n", rs, rt);
-			long int product = 0;
+			uint64_t product = 0;
 			if (operation == "mult") {
-				product = cycle[rs] *cycle[rt];
+				product = (uint64_t)((cycle[rs] * cycle[rt])&0xffffffffffffffff);	
 			}
 			else {
-				product = (unsigned long int)cycle[rs] * (unsigned long int)cycle[rt];
+				uint64_t tmp = 0x00000000ffffffff;
+				uint64_t rsval = (uint64_t)(cycle[rs]&tmp);
+				uint64_t rtval = (uint64_t)(cycle[rt] & tmp);
+				product = (uint64_t)rsval*(uint64_t)rtval;
 			}
-			int HI_value = ( unsigned int)((product >> 32) & 0xffffffff);
-			int LO_value = (unsigned int)(0xffffffff & product);
+			int HI_value = (int32_t)((product & 0xffffffff00000000) >> 32);
+			int LO_value = (int32_t)(0xffffffff & product);
 			if (HI != HI_value)
 			{
 				HI = HI_value;
@@ -421,9 +519,15 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 			address = (0x03ffffff & instr);
 			printf("address=%d\n", address);
 			if (operation == "jal") {
+				int ra_value = cycle[31];
 				cycle[31] = PC + 4;
 				PC = (((PC + 4) >> 28) << 28) + 4 * address;
-				printf("$%02d: 0x%08X\n", 31, cycle[31]);
+				if(ra_value!=cycle[31])
+					printf("$%02d: 0x%08X\n", 31, cycle[31]);
+				printf("PC: 0x%08X\n", PC);
+			}
+			else {
+				PC = (((PC + 4) >> 28) << 28) + 4 * address;
 				printf("PC: 0x%08X\n", PC);
 			}
 		}

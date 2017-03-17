@@ -120,6 +120,7 @@
   <ItemGroup>
     <ClCompile Include="instruction.cpp" />
     <ClCompile Include="instructions.cpp" />
+    <ClCompile Include="processor.cpp" />
     <ClCompile Include="test.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
