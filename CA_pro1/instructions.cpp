@@ -1,4 +1,4 @@
-
+/*
 #include<iostream>
 #include<string>
 #include<fstream>
@@ -583,3 +583,4 @@ int main()
 	trans_opcode(instruction,exec_instru,data,load_data);
 	return 0;
 }
+*/
