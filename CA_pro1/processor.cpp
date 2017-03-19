@@ -23,23 +23,24 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 	FILE* snapshot = fopen("snapshot.rpt", "w+");
 	FILE* error_file = fopen("error_dump.rpt", "w+");
 	printf("cycle %d\n", cycle_num);
-	//fprintf(snapshot,"cycle %d\n", cycle_num);
+	fprintf(snapshot,"cycle %d\n", cycle_num);
 	for (int i = 0; i < 32; i++)
 	{
 		printf("$%02d: 0x%08X\n", i, cycle[i]);
-		//fprintf(snapshot, "$%02d: 0x%08X\n", i, cycle[i]);
+		fprintf(snapshot, "$%02d: 0x%08X\n", i, cycle[i]);
 	}
 	printf( "HI: 0x%08X\n", HI);
 	printf( "LO: 0x%08X\n", LO);
 	printf( "PC: 0x%08X\n\n", PC);
-	//fprintf(snapshot, "HI: 0x%8X\n", HI);
-	//fprintf(snapshot, "LO: 0x%8X\n", LO);
-	//fprintf(snapshot, "PC: 0x%8X\n\n", PC);
+	fprintf(snapshot, "HI: 0x%08X\n", HI);
+	fprintf(snapshot, "LO: 0x%08X\n", LO);
+	fprintf(snapshot, "PC: 0x%08X\n\n\n", PC);
 	instr = instruction[2];
 	unsigned short int opcode = (0xfc000000 & instr) >> 26;
 	while (opcode != 0x3F) {
 		++cycle_num;
 		printf("cycle %d\n", cycle_num);
+		fprintf(snapshot,"cycle %d\n", cycle_num);
 		opcode = (0xfc000000 & instr) >> 26;
 		if (opcode == 0) {
 			unsigned short int funct = (0x0000003f & instr);
@@ -49,7 +50,7 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 				rt = (0x001f0000 & instr) >> 16;
 				rd = (0x0000f800 & instr) >> 11;
 				if (rd == 0) {
-					//fprintf(error_file, "In cycle %d:Write $0 Error\n", cycle_num);
+					fprintf(error_file, "In cycle %d:Write $0 Error\n", cycle_num);
 					printf("In cycle %d:Write $0 Error\n", cycle_num);
 				}
 				else {
@@ -60,7 +61,7 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 					case 0x20:
 						cycle[rd] = cycle[rs] + cycle[rt];
 						if ((rs_value > 0 && rt_value>0 && cycle[rd] <= 0) || (rs_value < 0 && rt_value<0 && cycle[rd] >= 0)) {
-							//fprintf(error_file, "In cycle %d:Number Overflow\n", cycle_num);
+							fprintf(error_file, "In cycle %d:Number Overflow\n", cycle_num);
 							printf("In cycle %d:Number Overflow\n", cycle_num);
 						}
 						break;
@@ -94,10 +95,10 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 					}
 					if (rd_value != cycle[rd])
 						printf_s("$%02d: 0x%08X\n", rd, cycle[rd]);
-						//fprintf(snapshot, "$%02d: 0x%08X\n", rd, cycle[rd]);
+						fprintf(snapshot, "$%02d: 0x%08X\n", rd, cycle[rd]);
 				}
 				PC = PC + 4;
-				//fprintf(snapshot, "PC: 0x%08X\n\n", PC);
+				fprintf(snapshot, "PC: 0x%08X\n\n", PC);
 				printf("PC: 0x%08X\n\n", PC);
 			}
 			else if (funct == 0x00 || funct == 0x02 || funct == 0x03) {
@@ -124,17 +125,17 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 				}
 				if (rd_value != cycle[rd])
 					printf("$%02d: 0x%08X\n", rd, cycle[rd]);
-					//fprintf(snapshot, "$%02d: 0x%08X\n", rd, cycle[rd]);
+					fprintf(snapshot, "$%02d: 0x%08X\n", rd, cycle[rd]);
 				PC = PC + 4;
-				//fprintf(snapshot, "PC: 0x%08X\n\n", PC);
-				printf("PC: 0x%08X\n\n", PC);
+				fprintf(snapshot, "PC: 0x%08X\n\n\n", PC);
+				printf("PC: 0x%08X\n\n\n", PC);
 			}
 			else if (funct == 0x08) {
 				short int rs;
 				rs = (0x03e00000 & instr) >> 21;
 				PC = cycle[rs];
-				printf( "PC: 0x%08X\n\n", PC);
-				//fprintf(snapshot, "PC: 0x%08X\n\n", PC);
+				printf( "PC: 0x%08X\n\n\n", PC);
+				fprintf(snapshot, "PC: 0x%08X\n\n\n", PC);
 			}
 			else if (funct == 0x18 || funct == 0x19) {
 				short int rs, rt;
@@ -157,44 +158,44 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 					HI = HI_value;
 					++HI_flag;
 					printf("HI: 0x%08X\n", HI);
-					//fprintf(snapshot,"HI: 0x%08X\n", HI);
+					fprintf(snapshot,"HI: 0x%08X\n", HI);
 				}
 				if (LO != LO_value) {
 					LO = LO_value;
 					++LO_flag;
 					printf("LO: 0x%08X\n", LO);
-					//fprintf(snapshot,"LO: 0x%08X\n", LO);
+					fprintf(snapshot,"LO: 0x%08X\n", LO);
 				}
 				if (HI_flag>1 || LO_flag>1) {//print error to file
 					printf("In cycle %d:Overwrite HI-LO registers\n", cycle_num);
-					//fprintf(error_file, "In cycle %d:Overwrite HI-LO registers\n", cycle_num);
+					fprintf(error_file, "In cycle %d:Overwrite HI-LO registers\n", cycle_num);
 				}
 				PC = PC + 4;
 				printf("PC: 0x%08X\n\n", PC);
-				//fprintf(snapshot,"PC: 0x%08X\n\n", PC);
+				fprintf(snapshot,"PC: 0x%08X\n\n\n", PC);
 			}
 			else if (funct == 0x10 || funct == 0x12) {
 				short int rd;
 				rd = (0x0000f800 & instr) >> 11;
 				if (rd == 0) {
 					printf("In cycle %d:Write $0 Error\n", cycle_num);
-					//fprintf(error_file, "In cycle %d:Write $0 Error\n", cycle_num);
+					fprintf(error_file, "In cycle %d:Write $0 Error\n", cycle_num);
 				}
 				else {
 					if (funct == 0x10) {
 						cycle[rd] = HI;
 						printf("$%02d: 0x%08X\n", rd, cycle[rd]);
-						//fprintf(snapshot, "$%02d: 0x%08X\n", rd, cycle[rd]);
+						fprintf(snapshot, "$%02d: 0x%08X\n", rd, cycle[rd]);
 					}
 					else {
 						cycle[rd] = LO;
 						printf("$%02d: 0x%08X\n", rd, cycle[rd]);
-						//fprintf(snapshot,"$%02d: 0x%08X\n", rd, cycle[rd]);
+						fprintf(snapshot,"$%02d: 0x%08X\n", rd, cycle[rd]);
 					}
 				}
 				PC = PC + 4;
 				printf("PC: 0x%08X\n", PC);
-				//fprintf(snapshot,"PC: 0x%08X\n", PC);
+				fprintf(snapshot,"PC: 0x%08X\n\n\n", PC);
 			}
 			else {
 				cout << "invalid function code" << endl;
@@ -208,7 +209,7 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 			immediate = (0x0000ffff & instr);
 			if (rt == 0) {
 				printf("In cycle %d:Write $0 Error\n", cycle_num);
-				//fprintf(error_file, "In cycle %d:Write $0 Error\n", cycle_num);
+				fprintf(error_file, "In cycle %d:Write $0 Error\n", cycle_num);
 			}
 			else {
 				if (opcode == 0x08) {
@@ -222,18 +223,18 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 					cycle[rt] = cycle[rs] + tmp;
 					if ((cycle[rs]>0 && tmp>0&&cycle[rt]<=0) || (cycle[rs]<0&& tmp<0&& cycle[rt]>=0))
 						printf("In cycle %d:Number Overflow\n", cycle_num);
-						//fprintf(error_file, "In cycle %d:Number Overflow\n", cycle_num);
+						fprintf(error_file, "In cycle %d:Number Overflow\n", cycle_num);
 				}
 				else {
 					cycle[rt] = cycle[rs] + (int32_t)immediate;
 				}
 				if (rt_value != cycle[rt]) 
 					printf("$%02d: 0x%08X\n", rt, cycle[rt]);
-					//fprintf(snapshot, "$%02d: 0x%08X\n", rt, cycle[rt]);
+					fprintf(snapshot, "$%02d: 0x%08X\n", rt, cycle[rt]);
 			}
 			PC = PC + 4;
-			printf("PC: 0x%08X\n", PC);
-			//fprintf(snapshot, "PC: 0x%08X\n", PC);
+			printf("PC: 0x%08X\n\n\n", PC);
+			fprintf(snapshot, "PC: 0x%08X\n\n\n", PC);
 		}
 		else if (opcode <= 0x25 && opcode >= 0x20 && opcode != 0x22) {
 			int16_t rs, rt, immediate;
@@ -359,10 +360,10 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 			else {
 				if (cycle[rt] != rt_value)
 					printf("$%02d: 0x%08X\n", rt, cycle[rt]);
-				//fprintf(snapshot,"$%02d: 0x%08X\n", rt, cycle[rt]);
+				fprintf(snapshot,"$%02d: 0x%08X\n", rt, cycle[rt]);
 				PC = PC + 4;
 				printf("PC: 0x%08X\n\n", PC);
-				//fprintf(snapshot,"PC: 0x%08X\n\n", PC);
+				fprintf(snapshot,"PC: 0x%08X\n\n\n", PC);
 			}
 		}
 		else if (opcode == 0x28 || opcode == 0x29 || opcode == 0x2B) {
@@ -443,8 +444,8 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 				break;
 			else {
 				PC = PC + 4;
-				printf("PC: 0x%08X\n\n", PC);
-				//fprintf(snapshot, "PC: 0x%08X\n\n", PC);
+				printf("PC: 0x%08X\n\n\n", PC);
+				fprintf(snapshot, "PC: 0x%08X\n\n\n", PC);
 			}
 		}
 		else if (opcode == 0x0F) {
@@ -454,17 +455,17 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 			immediate = (0x0000ffff & instr);
 			if (rt == 0) {
 				printf("In cycle %d:Write $0 Error\n", cycle_num);
-				//fprintf(error_file, "In cycle %d:Write $0 Error\n", cycle_num);
+				fprintf(error_file, "In cycle %d:Write $0 Error\n", cycle_num);
 			}
 			else {
 				cycle[rt] = ((uint32_t)((uint16_t)immediate)) << 16;
 				if (cycle[rt] != rt_value)
 					printf("$%02d: 0x%08X\n", rt, cycle[rt]);
-					//fprintf(snapshot, "$%02d: 0x%08X\n", rt, cycle[rt]);
+					fprintf(snapshot, "$%02d: 0x%08X\n", rt, cycle[rt]);
 			}
 			PC = PC + 4;
-			printf("PC: 0x%08X\n\n", PC);
-			//fprintf(snapshot, "PC: 0x%08X\n\n", PC);
+			printf("PC: 0x%08X\n\n\n", PC);
+			fprintf(snapshot, "PC: 0x%08X\n\n\n", PC);
 		}
 		else if (opcode == 0x0C || opcode == 0x0D || opcode == 0x0E || opcode == 0x0A) {
 			int16_t rs, rt, immediate;
@@ -474,7 +475,7 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 			immediate = (0x0000ffff & instr);
 			if (rt == 0) {
 				printf("In cycle %d:Write $0 Error\n", cycle_num);
-				//fprintf(error_file, "In cycle %d:Write $0 Error\n", cycle_num);
+				fprintf(error_file, "In cycle %d:Write $0 Error\n", cycle_num);
 			}
 			else {
 				if (opcode == 0x0C) {
@@ -491,12 +492,12 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 					cycle[rt] = (cycle[rs] <(int16_t)immediate);
 				}
 				if (cycle[rt] != rt_value)
-					printf( "$%02d: 0x%08X\n", rt, cycle[rt]);
-					//fprintf(snapshot, "$%02d: 0x%08X\n", rt, cycle[rt]);
+					printf( "$%02d: 0x%08X\n\n\n", rt, cycle[rt]);
+					fprintf(snapshot, "$%02d: 0x%08X\n\n\n", rt, cycle[rt]);
 			}
 			PC = PC + 4;
-			printf("PC: 0x%08X\n\n", PC);
-			//fprintf(snapshot, "PC: 0x%08X\n\n", PC);
+			printf("PC: 0x%08X\n\n\n", PC);
+			fprintf(snapshot, "PC: 0x%08X\n\n\n", PC);
 		}
 		else if (opcode == 0x04 || opcode == 0x05) {
 			int16_t rs, rt, immediate;
@@ -516,8 +517,8 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 			    else
 				    PC = PC + 4;
 			}
-			printf("PC: 0x%08X\n\n", PC);
-			//fprintf(snapshot, "PC: 0x%08X\n\n", PC);
+			printf("PC: 0x%08X\n\n\n", PC);
+			fprintf(snapshot, "PC: 0x%08X\n\n\n", PC);
 		}
 		else if (opcode == 0x07) {
 			int16_t rs, immediate;
@@ -527,8 +528,8 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 				PC = PC + 4 + 4 * immediate;
 			else
 				PC = PC + 4;
-			printf("PC: 0x%08X\n\n", PC);
-			//fprintf(snapshot, "PC: 0x%08X\n\n", PC);
+			printf("PC: 0x%08X\n\n\n", PC);
+			fprintf(snapshot, "PC: 0x%08X\n\n\n", PC);
 		}
 		else if (opcode == 0x02 || opcode == 0x03) {
 			int32_t address;
@@ -542,10 +543,10 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 				PC = (((PC + 4) >> 28) << 28) + 4 * address;
 				if (ra_value != cycle[31])
 					printf("$%02d: 0x%08X\n", 31, cycle[31]);
-					//fprintf(snapshot,"$%02d: 0x%08X\n", 31, cycle[31]);
+					fprintf(snapshot,"$%02d: 0x%08X\n", 31, cycle[31]);
 			}
-			printf("PC: 0x%08X\n\n", PC);
-			//fprintf(snapshot, "PC: 0x%08X\n\n", PC);
+			printf("PC: 0x%08X\n\n\n", PC);
+			fprintf(snapshot, "PC: 0x%08X\n\n\n", PC);
 		}
 		else if (opcode == 0x3F) {
 			break;
