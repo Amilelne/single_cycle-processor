@@ -293,12 +293,12 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 				cout << "PC: " << hex << setfill('0') << setw(8) << PC << endl;
 			}
 			else if (operation == "lw") {
-				if (rs != 0) {
+				if (rs == 29) {
 					//get data from stack
 					cycle[rt] = stack[immediate / 4+(iniSP-cycle[29])/4-1];
 				}
 				else {
-					cycle[rt] = data[2+immediate / 4];
+					cycle[rt] = data[2+(immediate+cycle[rs])/4];
 				}
 				PC = PC + 4;
 				if (cycle[rt] != rt_value)
@@ -432,7 +432,9 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 			rt = (0x001f0000 & instr) >> 16;
 			rd = (0x0000f800 & instr) >> 11;
 			shamt = (0x000007c0 & instr) >> 6;
+			cycle[rd] = cycle[rt] << shamt;
 			printf("rt=%d,rd=%d,shamt=%d\n", rt, rd, shamt);
+			PC = PC + 4;
 		}
 		else if (operation == "jr") {
 			short int rs;
@@ -504,6 +506,18 @@ void trans_opcode(unsigned int instruction[],unsigned int execu_instru,unsigned 
 			short int rt, immediate;
 			rt = (0x001f0000 & instr) >> 16;
 			immediate = (0x0000ffff & instr);
+			int rt_value = cycle[rt];
+			if (rt == 0) {
+				printf("In cycle %d: Write $0 Error\n", cycle_num);
+				//fprintf(error_file, "In cycle %d: Write $0 Error\n", cycle_num);
+			}
+			else {
+				cycle[rt] = ((uint32_t)((uint16_t)immediate)) << 16;
+				if (cycle[rt] != rt_value)
+					printf("$%02d: 0x%08X\n", rt, cycle[rt]);
+				//fprintf(snapshot, "$%02d: 0x%08X\n", rt, cycle[rt]);
+			}
+			PC = PC + 4;
 			printf("rt=%d,immediate=%d\n", rt, immediate);
 		}
 		else if (operation == "bgtz") {
@@ -582,5 +596,4 @@ int main()
 	unsigned int load_data = (unsigned int)data[1];
 	trans_opcode(instruction,exec_instru,data,load_data);
 	return 0;
-}
-*/
+}*/
