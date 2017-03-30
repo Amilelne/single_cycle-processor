@@ -16,6 +16,7 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 	unsigned int iniPC = PC;//save the initial value of PC
 	int cycle_num = 0;//count how many cycle have run
 	int stack[100] = { 0 };
+	bool ovwr=false;
 	short int HI_flag = 0;//check if HI has changed
 	short int LO_flag = 0;//check if LO has changed
 	cycle[29] = (unsigned int)data[0];
@@ -38,6 +39,7 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 	instr = instruction[2];
 	unsigned short int opcode = (0xfc000000 & instr) >> 26;
 	while (opcode != 0x3F) {
+		printf("instr=%08x\n",instr);
 		printf("opcode == %06x\n", opcode);
 		++cycle_num;
 		if (opcode == 0x3E) {
@@ -170,38 +172,43 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 					short int rs, rt;
 					rs = (0x03e00000 & instr) >> 21;
 					rt = (0x001f0000 & instr) >> 16;
-					uint64_t product = 0;
+					int64_t product = 0;
+					uint32_t HI_value = 0;
+					uint32_t LO_value = 0;
 					if (funct == 0x18) {
-						product = (uint64_t)((cycle[rs] * cycle[rt]) & 0xffffffffffffffff);
+						product = (int64_t)(int32_t)cycle[rs] * (int64_t)(int32_t)cycle[rt];
+					  HI_value = (uint32_t)((product>>32) & 0xffffffff);
+						LO_value = (uint32_t)(0xffffffff & product);
 					}
 					else {
 						uint64_t tmp = 0x00000000ffffffff;
 						uint64_t rsval = (uint64_t)(cycle[rs] & tmp);
 						uint64_t rtval = (uint64_t)(cycle[rt] & tmp);
-						product = (uint64_t)rsval*(uint64_t)rtval;
+						uint64_t temp = (uint64_t)rsval*(uint64_t)rtval;
+						HI_value = (uint32_t)((temp>>32) & 0xffffffff);
+						LO_value = (uint32_t)(0xffffffff & temp);
 					}
-					int HI_value = (int32_t)((product & 0xffffffff00000000) >> 32);
-					int LO_value = (int32_t)(0xffffffff & product);
+					++HI_flag;
+					++LO_flag;
 					if (HI != HI_value)
 					{
 						HI = HI_value;
-						++HI_flag;
 						printf("$HI: 0x%08X\n", HI);
 						fprintf(snapshot, "$HI: 0x%08X\n", HI);
 					}
 					if (LO != LO_value) {
 						LO = LO_value;
-						++LO_flag;
 						printf("$LO: 0x%08X\n", LO);
 						fprintf(snapshot, "$LO: 0x%08X\n", LO);
 					}
-					if (HI_flag>1 || LO_flag>1) {//print error to file
-						printf("In cycle %d: Overwrite HI-LO registers\n", cycle_num);
+					if (ovwr) {//print error to file
+						printf( "In cycle %d: Overwrite HI-LO registers\n", cycle_num);
 						fprintf(error_file, "In cycle %d: Overwrite HI-LO registers\n", cycle_num);
 					}
 					PC = PC + 4;
 					printf("PC: 0x%08X\n\n\n", PC);
 					fprintf(snapshot, "PC: 0x%08X\n\n\n", PC);
+					ovwr = true;
 				}
 				else if (funct == 0x10 || funct == 0x12) {
 					short int rd;
@@ -213,11 +220,11 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 					else {
 						if (funct == 0x10) {
 							cycle[rd] = HI;
-							printf("$%02d: 0x%08X\n", rd, cycle[rd]);
-							fprintf(snapshot, "$%02d: 0x%08X\n", rd, cycle[rd]);
 						}
 						else {
 							cycle[rd] = LO;
+						}
+						if(rd_value!=cycle[rd]){
 							printf("$%02d: 0x%08X\n", rd, cycle[rd]);
 							fprintf(snapshot, "$%02d: 0x%08X\n", rd, cycle[rd]);
 						}
@@ -442,7 +449,7 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 					if (cycle[rt] != rt_value) {
 						printf("$%02d: 0x%08X\n", rt, cycle[rt]);
 						fprintf(snapshot, "$%02d: 0x%08X\n", rt, cycle[rt]);
-					}		
+					}
 				}
 				PC = PC + 4;
 				printf("PC: 0x%08X\n\n\n", PC);
@@ -476,7 +483,7 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 					if (cycle[rt] != rt_value) {
 						printf("$%02d: 0x%08X\n", rt, cycle[rt]);
 						fprintf(snapshot, "$%02d: 0x%08X\n", rt, cycle[rt]);
-					}	
+					}
 				}
 				PC = PC + 4;
 				printf("PC: 0x%08X\n\n\n", PC);
@@ -527,7 +534,7 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 					if (ra_value != cycle[31]) {
 						printf("$%02d: 0x%08X\n", 31, cycle[31]);
 						fprintf(snapshot, "$%02d: 0x%08X\n", 31, cycle[31]);
-					}	
+					}
 				}
 				printf("PC: 0x%08X\n\n\n", PC);
 				fprintf(snapshot, "PC: 0x%08X\n\n\n", PC);
@@ -543,12 +550,12 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 		if (PC < iniPC) {
 			PC = PC + 4;
 			opcode = 0x3E;
-			
+
 		}
 		else {
 			instr = instruction[(PC - iniPC) / 4 + 2];
 			opcode = (0xfc000000 & instr) >> 26;
-		}	
+		}
 	}
 	fclose(snapshot);
 	fclose(error_file);
