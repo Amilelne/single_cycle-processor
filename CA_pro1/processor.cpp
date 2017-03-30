@@ -211,8 +211,10 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 					ovwr = true;
 				}
 				else if (funct == 0x10 || funct == 0x12) {
+					ovwr = false;
 					short int rd;
 					rd = (0x0000f800 & instr) >> 11;
+					int rd_value = cycle[rd];
 					if (rd == 0) {
 						printf("In cycle %d: Write $0 Error\n", cycle_num);
 						fprintf(error_file, "In cycle %d: Write $0 Error\n", cycle_num);
@@ -298,7 +300,7 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 					halt_flag = true;
 				}
 				if (opcode == 0x21 || opcode == 0x25) {
-					if ((immediate + cycle[rs]) % 4 == 1 || (immediate + cycle[rs]) % 4 == 3) {
+					if ((uint32_t)(immediate + cycle[rs]) > 1022) {
 						printf("In cycle %d: Misalignment Error\n", cycle_num);
 						fprintf(error_file, "In cycle %d: Misalignment Error\n", cycle_num);
 						halt_flag = true;
@@ -581,15 +583,25 @@ int main()
 	ifstream datafile(dimage, ios::in | ios::binary | ios::ate);
 	long datasize = datafile.tellg();
 	datafile.seekg(0, ios::beg);
-	databuf = new char[size];
+	databuf = new char[datasize];
 	datafile.read(databuf, datasize);
 	datafile.close();
-	for (int i = 0; i < instru_num; i++) {
+	for (int i = 0; i < 2; i++) {
 		for (int j = 0; j < 4; j++) {
 			instruction[i] = instruction[i] * 16 * 16 + (unsigned int)((unsigned char)buffer[4 * i + j]);
 		}
 	}
-	for (int i = 0; i < datasize / 4; i++) {
+	for (int i = 0; i < instruction[1]+2; i++) {
+		for (int j = 0; j < 4; j++) {
+			instruction[i] = instruction[i] * 16 * 16 + (unsigned int)((unsigned char)buffer[4 * i + j]);
+		}
+	}
+	for (int i = 0; i < 2; i++) {
+		for (int j = 0; j < 4; j++) {
+			data[i] = data[i] * 16 * 16 + (unsigned int)((unsigned char)(databuf[4 * i + j]));
+		}
+	}
+	for (int i = 2; i < data[1]+2; i++) {
 		for (int j = 0; j < 4; j++) {
 			data[i] = data[i] * 16 * 16 + (unsigned int)((unsigned char)(databuf[4 * i + j]));
 		}
