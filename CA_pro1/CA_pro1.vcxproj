@@ -118,10 +118,17 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="cmp.cpp" />
     <ClCompile Include="instruction.cpp" />
     <ClCompile Include="instructions.cpp" />
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="processor.cpp" />
     <ClCompile Include="test.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="cmp.h" />
+    <ClInclude Include="exeinstr.h" />
+    <ClInclude Include="regfile.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

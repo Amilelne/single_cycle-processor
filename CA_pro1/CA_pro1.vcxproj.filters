@@ -27,5 +27,22 @@
     <ClCompile Include="processor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="cmp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="cmp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="regfile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="exeinstr.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
