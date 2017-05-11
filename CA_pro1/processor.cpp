@@ -1,14 +1,186 @@
-
 #include<iostream>
 #include<string>
 #include<fstream>
 #include<stdio.h>
 #include<iomanip>
 #include<stdint.h>
+#include<vector>
 #include "cmp.h"
 const int N = 258;
 using namespace std;
-void get_operation(unsigned int instruction[], unsigned int execu_instru, unsigned int data[], unsigned int load_data) {
+int process_dcache(int D_page_size, int D_VPA, int D_block_size, int D_cache_index, int D_cache_entries, int D_cache_way, int D_PPN, vector<D_cache>& Dcache, bool D_PAGE_REPLACE,bool write) {
+	int offset = D_page_size / 4;
+	int pAddr = D_VPA % (offset)+D_PPN*offset;
+	int cache_offset = D_block_size / 4;
+	int index = (pAddr / cache_offset) % D_cache_index;
+	int tag = (pAddr / cache_offset) / D_cache_index;
+	int row_size = (D_block_size*D_cache_way) / 4;
+	int hit = 0;
+	int MRU = 1;
+	int MRU_pos = -1;
+	int MRU_one_num = 0;
+	int hit_pos = -1;
+	for (int i = index*row_size; i < (index + 1)*row_size; i++) {
+		if (Dcache[i].tag == tag&&Dcache[i].valid) {
+			hit = 1;
+			hit_pos = i;
+			Dcache[i].MRU = 1;
+		}
+		if (Dcache[i].MRU < MRU) {
+			MRU = Dcache[i].MRU;
+			MRU_pos = i;
+		}
+		if (Dcache[i].MRU == 1)
+			++MRU_one_num;
+	}
+	if (hit == 0) {
+		if (MRU_one_num == row_size - 1) {
+			for (int i = index*row_size; i < (index + 1)*row_size; i++)
+				Dcache[i].MRU = 0;
+			Dcache[MRU_pos].tag = tag;
+			Dcache[MRU_pos].valid = true;
+			Dcache[MRU_pos].MRU = 1;
+		}
+		else {
+			Dcache[MRU_pos].tag = tag;
+			Dcache[MRU_pos].valid = true;
+			Dcache[MRU_pos].MRU = 1;
+		}
+	}
+	else if (hit == 1) {
+		if (MRU_one_num == row_size) {
+			for (int i = index*row_size; i < (index + 1)*row_size; i++)
+				Dcache[i].MRU = 0;
+			Dcache[hit_pos].MRU = 1;
+		}
+	}
+	if (D_PAGE_REPLACE) {
+		for (int i = (MRU_pos / row_size)*row_size; i < (MRU_pos / row_size + 1)*row_size&&i != MRU_pos; i++) {
+			if (Dcache[i].tag == Dcache[MRU_pos].tag&&Dcache[i].valid) {
+				Dcache[i].valid = false;
+				break;
+			}
+		}
+	}
+	return hit;
+}
+int process_ipte(int cycle, int I_VPN, int I_PPN_SIZE, vector<I_PTE>& ipte, int ipte_entry, int icache_entry,int &I_PPN,bool I_PAGE_REPLACE) {
+	int hit = 0;
+	bool pte_fresh = false;
+	if (ipte[I_VPN].valid) {
+		hit = 1;
+		ipte[I_VPN].num = cycle;
+		I_PPN = ipte[I_VPN].PPN;
+	}
+	else {
+		int min_num = 0;
+		int min_num_pos = 0;
+		int max_PPN = -1;
+		for (int i = 0; i < ipte_entry; i++) {
+			if (ipte[i].num < min_num&&ipte[i].valid) {
+				min_num = ipte[i].num;
+				min_num_pos = i;
+			}
+			if (ipte[i].PPN > max_PPN) {
+				max_PPN = ipte[i].PPN;
+			}
+		}
+		if (max_PPN <I_PPN_SIZE-1) {
+			ipte[I_VPN].valid = true;
+			ipte[I_VPN].num = cycle;
+			ipte[I_VPN].PPN = max_PPN+1;
+			I_PPN = ipte[I_VPN].PPN;
+		}
+		else if (max_PPN == I_PPN_SIZE - 1) {
+			ipte[I_VPN].valid = true;
+			ipte[I_VPN].num = cycle;
+			ipte[I_VPN].PPN = ipte[min_num_pos].PPN;
+			I_PPN = ipte[min_num_pos].PPN;
+			ipte[min_num_pos].valid = false;
+			I_PAGE_REPLACE = true;
+		}
+	}
+	return hit;
+}
+int process_itlb(int cycle, int I_VPN, vector<I_TLB>& ITLB, int I_TLB_entries) {
+	int tlb_hit = 0;
+	int min_num = ITLB[0].num;
+	int min_num_pos = 0;
+	for (int i = 0; i < I_TLB_entries; i++) {
+		if (ITLB[i].tag == I_VPN&&ITLB[i].valid) {
+			ITLB[i].num = cycle;
+			tlb_hit = 1;
+			break;
+		}
+		if (ITLB[i].num < min_num) {
+			min_num = ITLB[i].num;
+			min_num_pos = i;
+		}
+	}
+	if (tlb_hit == 0) {
+		ITLB[min_num_pos].num = cycle;
+		ITLB[min_num_pos].tag = I_VPN;
+		ITLB[min_num_pos].valid = true;
+	}
+	return tlb_hit;
+}
+int process_icache(int I_page_size, int I_VPA, int I_block_size, int I_cache_index, int I_cache_entries, int I_cache_way, int I_PPN,vector<I_cache>& Icache,bool I_PAGE_REPLACE) {
+	int offset = I_page_size / 4;
+	int pAddr = I_VPA % (offset)+I_PPN*offset;
+	int cache_offset = I_block_size / 4;
+	int index = (pAddr / cache_offset) % I_cache_index;
+	int tag = (pAddr / cache_offset) / I_cache_index;
+	int row_size = (I_block_size*I_cache_way)/4;
+	int hit = 0;
+	int MRU = 1;
+	int MRU_pos = index*row_size;
+	int MRU_one_num = 0;
+	int hit_pos = -1;
+	for (int i = index*row_size; i < (index + 1)*row_size; i++) {
+		if (Icache[i].tag == tag&&Icache[i].valid) {
+			hit = 1;
+			hit_pos = i;
+			Icache[i].MRU = 1;
+		}
+		if (Icache[i].MRU < MRU) {
+			MRU = Icache[i].MRU;
+			MRU_pos = i;
+		}
+		if (Icache[i].MRU == 1)
+			++MRU_one_num;
+	}
+	if (hit == 0) {
+		if (MRU_one_num == row_size - 1) {
+			for (int i = index*row_size; i < (index + 1)*row_size; i++)
+				Icache[i].MRU = 0;
+			Icache[MRU_pos].tag = tag;
+			Icache[MRU_pos].valid = true;
+			Icache[MRU_pos].MRU = 1;
+		}
+		else {
+			Icache[MRU_pos].tag = tag;
+			Icache[MRU_pos].valid = true;
+			Icache[MRU_pos].MRU = 1;
+		}
+	}
+	else if (hit == 1) {
+		if (MRU_one_num == row_size) {
+			for (int i = index*row_size; i < (index + 1)*row_size; i++)
+				Icache[i].MRU = 0;
+			Icache[hit_pos].MRU = 1;
+		}
+	}
+	if (I_PAGE_REPLACE ) {
+		for (int i = (MRU_pos / row_size)*row_size; i < (MRU_pos / row_size + 1)*row_size&&i!=MRU_pos; i++) {
+			if (Icache[i].tag == Icache[MRU_pos].tag&&Icache[i].valid) {
+				Icache[i].valid = false;
+				break;
+			}
+		}
+	}
+	return hit;
+}
+void get_operation(unsigned int instruction[], unsigned int execu_instru, unsigned int data[], unsigned int load_data , int argument[]) {
 	unsigned int instr = instruction[0];
 	int cycle[32] = { 0 };
 	unsigned int HI = 0;
@@ -22,8 +194,34 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 	short int LO_flag = 0;//check if LO has changed
 	cycle[29] = (unsigned int)data[0];
 	unsigned int iniSP = cycle[29];//save the initial value of SP pointer;
+	int I_mem_w = 16;
+	int D_mem_w = 8;
+	int I_PTE_entries = 1024 / argument[2];
+	int D_PTE_entries = 1024 / argument[3];
+	int I_TLB_entries = I_PTE_entries / 4;
+	int D_TLB_entries = D_PTE_entries / 4;
+	int I_cache_entries = argument[4] / argument[5];
+	int D_cache_entries = argument[7] / argument[8];
+	int I_cache_index = I_cache_entries / argument[6];
+	int D_cache_index = D_cache_entries / argument[9];
+	int I_VPN = 0;
+	int I_VPA = 0;
+	int D_VPN = 0;
+	int D_VPA = 0;
+	int I_offset = log2(argument[2]);
+	int D_offset = log2(argument[3]);
+	int I_PPN_SIZE = argument[0] / argument[2];
+	int D_PPN_SIZE = argument[1] / argument[3];
+	vector<I_PTE> IPTE(I_PTE_entries);
+	vector<I_cache> Icache(I_cache_entries);
+	vector<I_TLB>ITLB(I_TLB_entries);
+	vector<I_PTE> DPTE(D_PTE_entries);
+	vector<I_cache> Dcache(D_cache_entries);
+	vector<I_TLB> DTLB(D_TLB_entries);
+
 	FILE* snapshot = fopen("snapshot.rpt", "w+");
 	FILE* error_file = fopen("error_dump.rpt", "w+");
+	FILE* trace = fopen("trace.rpt", "w+");
 	fprintf(snapshot, "cycle %d\n", cycle_num);
 	for (int i = 0; i < 32; i++)
 	{
@@ -32,11 +230,86 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 	fprintf(snapshot, "$HI: 0x%08X\n", HI);
 	fprintf(snapshot, "$LO: 0x%08X\n", LO);
 	fprintf(snapshot, "PC: 0x%08X\n\n\n", PC);
-	int I_VPA = (PC - iniPC) / 4 + 2;
 	instr = instruction[2];
     uint16_t opcode = (0xfc000000 & instr) >> 26;
+	int I_PPN = 0;
+	int D_PPN = 0;
 	while (opcode != 0x3F) {
 		++cycle_num;
+		I_VPA = (PC - iniPC) / 4;
+		I_VPN = I_VPA / (argument[2] / 4);
+		//printf("cycle=%d,I_VPA=%d,I_VPN=%d\n", cycle_num,I_VPA, I_VPN);
+		bool I_PAGE_REPLACE = false; 
+		int itlb_hit = 0;
+		int icache_hit = 0;
+		int ipte_hit = 0;
+		ipte_hit = process_ipte(cycle_num,I_VPN,I_PPN_SIZE,IPTE,I_PTE_entries,I_cache_entries,I_PPN,I_PAGE_REPLACE);
+		if (!ipte_hit) {
+			itlb_hit = process_itlb(cycle_num, I_VPN, ITLB, I_TLB_entries);
+			icache_hit = process_icache(argument[2], I_VPA, argument[5], I_cache_index, I_cache_entries, argument[6], I_PPN, Icache,I_PAGE_REPLACE);
+		}
+		else {
+			itlb_hit = process_itlb(cycle_num, I_VPN, ITLB, I_TLB_entries);
+			icache_hit = process_icache(argument[2], I_VPA, argument[5], I_cache_index, I_cache_entries, argument[6], I_PPN, Icache,I_PAGE_REPLACE);
+		}
+		if (itlb_hit&&!icache_hit) {
+			if(opcode >= 0x20 && opcode <= 0x2B)
+				fprintf(trace, "%d,%02X : ITLB;", cycle_num, opcode);
+			else
+				fprintf(trace, "%d,%02X : ITLB;\n", cycle_num, opcode);
+		}
+		if (!itlb_hit && icache_hit) {
+			if (opcode >= 0x20 && opcode <= 0x2B)
+				fprintf(trace, "%d,%02X : ICACHE;", cycle_num, opcode);
+			else
+				fprintf(trace, "%d,%02X : ICACHE;\n", cycle_num, opcode);
+		}
+		if (itlb_hit&&icache_hit) {
+			if (opcode >= 0x20 && opcode <= 0x2B)
+				fprintf(trace, "%d,%02X : ITLB,ICACHE;", cycle_num, opcode);
+			else
+				fprintf(trace, "%d,%02X : ITLB,ICACHE;\n", cycle_num, opcode);
+		}
+		if (!itlb_hit && !icache_hit) {
+			if (opcode >= 0x20 && opcode <= 0x2B)
+				fprintf(trace, "%d,%02X : DISK;", cycle_num, opcode);
+			else
+				fprintf(trace, "%d,%02X : DISK;\n", cycle_num, opcode);
+		}
+		if (opcode >= 0x20 && opcode <= 0x2B) {
+			int rs = (0x03e00000 & instr) >> 21;
+			int rt = (0x001f0000 & instr) >> 16;
+			int immediate = (0x0000ffff & instr);
+			bool write = false;
+			D_VPA = (cycle[rs] + immediate) / 4;
+			D_VPN = D_VPA / (argument[3] / 4);
+			printf("cycle=%d,D_VPA=%d,D_VPN=%d\n", cycle_num, D_VPA, D_VPN);
+			bool D_PAGE_REPLACE = false;
+			int dtlb_hit = 0;
+			int dcache_hit = 0;
+			int dpte_hit = 0;
+			dpte_hit = process_ipte(cycle_num, D_VPN, D_PPN_SIZE, DPTE, D_PTE_entries, D_cache_entries, D_PPN, D_PAGE_REPLACE);
+			if (!dpte_hit) {
+				dtlb_hit = process_itlb(cycle_num, D_VPN, DTLB, D_TLB_entries);
+				dcache_hit = process_icache(argument[3], D_VPA, argument[8], D_cache_index, D_cache_entries, argument[9], D_PPN, Dcache, D_PAGE_REPLACE);
+			}
+			else {
+				dtlb_hit = process_itlb(cycle_num, D_VPN, DTLB, D_TLB_entries);
+				dcache_hit = process_icache(argument[3], D_VPA, argument[8], D_cache_index, D_cache_entries, argument[9], D_PPN, Dcache, D_PAGE_REPLACE);
+			}
+			if (dtlb_hit && !dcache_hit) {
+				fprintf(trace, "   DTLB\n");
+			}
+			if (!dtlb_hit && dcache_hit) {
+				fprintf(trace, "  DCACHE\n");
+			}
+			if (dtlb_hit&&dcache_hit) {
+				fprintf(trace, "   DTLB , DCACHE\n");
+			}
+			if (!dtlb_hit && !dcache_hit) {
+				fprintf(trace, "   DISK\n");
+			}
+		}
 		if (opcode == 0x3E) {
 			fprintf(snapshot, "cycle %d\n", cycle_num);
 			fprintf(snapshot, "PC: 0x%08X\n\n\n", PC);
@@ -559,6 +832,7 @@ void get_operation(unsigned int instruction[], unsigned int execu_instru, unsign
 	}
 	fclose(snapshot);
 	fclose(error_file);
+	fclose(trace);
 }
 int main(int argc,char *argv[])
 {
@@ -613,6 +887,6 @@ int main(int argc,char *argv[])
 	unsigned int exec_instru = (unsigned int)instruction[1];
 	//number of datas to be loaded into D memory
 	unsigned int load_data = (unsigned int)data[1];
-	get_operation(instruction, exec_instru, data, load_data);
+	get_operation(instruction, exec_instru, data, load_data,argument);
 	return 0;
 }
