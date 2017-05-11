@@ -1,22 +1,34 @@
 #pragma once
 class I_PTE {
 public:
-	int VPN;
 	bool valid;
 	int PPN;
+	int num;
 	I_PTE() {
-		VPN = 0;
 		valid = false;
 		PPN = -1;
+		num = 0;
 	}
 };
 class I_cache {
+public:
 	int tag;
 	bool valid;
-	int content;
+	bool MRU;
 	I_cache() {
 		tag = -1;
 		valid = false;
-		content = -1;
+		MRU = false;
+	}
+};
+class I_TLB {
+public:
+	int tag;
+	bool valid;
+	int num;
+	I_TLB() {
+		num = 0;
+		tag = -1;
+		valid = false;
 	}
 };
